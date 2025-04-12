@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, dialog } from 'electron';
 import path from 'path';
 
 function createWindow() {
@@ -17,6 +17,19 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   createWindow();
+
+  // Example: Show an open dialog when the app is ready
+  try {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory'],
+    });
+    if (!result.canceled && result.filePaths.length > 0) {
+      console.log('Selected directory:', result.filePaths[0]);
+      // In a real app, you would use this path
+    }
+  } catch (err) {
+    console.error('Failed to show open dialog:', err);
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
