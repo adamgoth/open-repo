@@ -1,3 +1,4 @@
+console.log('--- Reading forge.config.cjs ---');
 const { FusesPlugin } = require('@electron-forge/plugin-fuses');
 const { FuseV1Options, FuseVersion } = require('@electron/fuses');
 
@@ -26,6 +27,29 @@ module.exports = {
   ],
   plugins: [
     {
+      name: '@electron-forge/plugin-vite',
+      config: {
+        // `build` can specify multiple entry points to Vite config
+        build: [
+          {
+            // `entry` is just an alias for `build.lib.entry` in the corresponding Vite configuration
+            entry: 'main.js',
+            config: 'vite.main.config.mjs',
+          },
+          {
+            entry: 'preload.js',
+            config: 'vite.preload.config.mjs',
+          },
+        ],
+        renderer: [
+          {
+            name: 'main_window',
+            config: 'vite.renderer.config.mjs',
+          },
+        ],
+      },
+    },
+    {
       name: '@electron-forge/plugin-auto-unpack-natives',
       config: {},
     },
@@ -42,3 +66,4 @@ module.exports = {
     }),
   ],
 };
+console.log('--- Finished reading forge.config.cjs ---');

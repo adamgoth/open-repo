@@ -8,6 +8,13 @@ import ignore from 'ignore'; // Import the ignore package
 const __filename = url.fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+console.log('--- main.js started ---');
+console.log('__dirname:', __dirname);
+// Remove the problematic early logging of potentially undefined globals
+// console.log('process.env:', JSON.stringify(process.env, null, 2)); // Optional: Keep or remove process.env log as needed
+// console.log('MAIN_WINDOW_VITE_DEV_SERVER_URL:', typeof MAIN_WINDOW_VITE_DEV_SERVER_URL, MAIN_WINDOW_VITE_DEV_SERVER_URL);
+// console.log('MAIN_WINDOW_VITE_NAME:', typeof MAIN_WINDOW_VITE_NAME, MAIN_WINDOW_VITE_NAME);
+
 const DEFAULT_IGNORES = ['.git', 'node_modules/**'];
 
 // Recursive function to scan directory, now with filtering and size
@@ -105,6 +112,7 @@ async function handleScanDirectory(event, dirPath) {
 }
 
 function createWindow() {
+  console.log('--- createWindow called ---');
   const win = new BrowserWindow({
     width: 800,
     height: 600,
@@ -117,13 +125,21 @@ function createWindow() {
     },
   });
 
-  // Load the React dev server in development, or the built app in production
-  if (process.env.VITE_DEV_SERVER_URL) {
-    win.loadURL(process.env.VITE_DEV_SERVER_URL);
+  // Load the Vite dev server URL in development or the production file path
+  if (!app.isPackaged) {
+    // Development mode (running with electron-forge start)
+    console.log('Loading DEV URL: http://localhost:5173');
+    win.loadURL('http://localhost:5173'); // Default Vite port
+    // Optional: Open DevTools automatically in development
+    // win.webContents.openDevTools();
   } else {
-    // Load your index.html file
-    // Ensure this path is correct for your build output
-    win.loadFile(path.join(__dirname, 'dist/index.html'));
+    // Production mode (running from packaged app)
+    const indexPath = path.join(
+      __dirname,
+      '../renderer/main_window/index.html',
+    );
+    console.log(`Loading PROD file: ${indexPath}`);
+    win.loadFile(indexPath);
   }
 }
 
