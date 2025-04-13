@@ -153,6 +153,21 @@ function App() {
     return fileIds;
   };
 
+  // --- Helper function to recursively get all descendant nodes (files and folders) ---
+  const getAllDescendantNodes = (node) => {
+    let nodes = [node]; // Start with the node itself
+    // Check if the node is internal (a folder) and has children loaded
+    // Note: react-arborist might lazy-load children. Ensure children are available.
+    // If children might not be loaded, this needs adjustment or rely on tree props.
+    if (node.isInternal && node.children) {
+      node.children.forEach(child => {
+        // Recursively get descendants for each child
+        nodes = nodes.concat(getAllDescendantNodes(child));
+      });
+    }
+    return nodes;
+  };
+
   // --- Handlers for Prompt Generation ---
   const handleInstructionChange = (e) => {
     setInstruction(e.target.value);
@@ -300,20 +315,34 @@ function App() {
                           checked={selectedNodes.some(selNode => selNode.id === node.id)}
                           onChange={(e) => {
                             e.stopPropagation();
-                            // --- Manual state management --- 
                             const currentlySelected = selectedNodes.some(selNode => selNode.id === node.id);
-                            let newSelection;
-                            if (currentlySelected) {
-                              // Deselect: Filter out the current node
-                              newSelection = selectedNodes.filter(selNode => selNode.id !== node.id);
+                            let newSelectedNodes;
+
+                            if (node.isInternal) {
+                              // It's a directory
+                              const descendants = getAllDescendantNodes(node); // Get node and all descendants
+                              const descendantIds = new Set(descendants.map(n => n.id));
+
+                              if (currentlySelected) {
+                                // Unchecking a directory: Remove itself and all descendants
+                                newSelectedNodes = selectedNodes.filter(selNode => !descendantIds.has(selNode.id));
+                              } else {
+                                // Checking a directory: Add itself and all descendants (avoid duplicates)
+                                const currentSelectedIds = new Set(selectedNodes.map(n => n.id));
+                                const nodesToAdd = descendants.filter(d => !currentSelectedIds.has(d.id));
+                                newSelectedNodes = [...selectedNodes, ...nodesToAdd];
+                              }
                             } else {
-                              // Select: Add the current node
-                              newSelection = [...selectedNodes, node];
+                              // It's a file
+                              if (currentlySelected) {
+                                // Unchecking a file
+                                newSelectedNodes = selectedNodes.filter(selNode => selNode.id !== node.id);
+                              } else {
+                                // Checking a file
+                                newSelectedNodes = [...selectedNodes, node];
+                              }
                             }
-                            setSelectedNodes(newSelection); // Update the state directly
-                            // --- End manual state management ---
-                            // console.log(`[Checkbox onChange] Node ID: ${node.id}, isSelected BEFORE call: ${node.state.isSelected}`); 
-                            // node.selectMulti(e); // DO NOT call node API here
+                            setSelectedNodes(newSelectedNodes);
                           }}
                           className="mr-2 cursor-pointer"
                         />
@@ -355,19 +384,34 @@ function App() {
                 <div className="text-sm w-full">
                     <p className="mb-2">Selected {selectedNodes.length} item(s):</p>
                     <ul className="list-none p-0">
-                        {selectedNodes.map(node => (
-                            <li key={node.id} className="flex justify-between items-center text-xs mb-1 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title={node.id}>
-                              <span className="font-mono truncate mr-2">{node.data.name}</span>
-                              {/* Display size only if it's a file (has size data) */} 
-                              {node.data.size !== undefined && node.data.size !== null && (
-                                <span className="text-gray-500 dark:text-gray-400 whitespace-nowrap">{formatBytes(node.data.size)}</span>
-                              )}
-                              {/* Indicate folder if no size */} 
-                              {(node.data.size === undefined || node.data.size === null) && node.isInternal && (
-                                <span className="text-gray-500 dark:text-gray-400 whitespace-nowrap text-xs">Folder</span>
-                              )}
-                            </li>
-                        ))}
+                        {[...selectedNodes]
+                           .sort((a, b) => a.id.localeCompare(b.id)) // Sort nodes by path
+                           .map(node => {
+                              // Calculate depth for indentation
+                              const relativePath = selectedDirectory ? path.relative(selectedDirectory, node.id) : node.id;
+                              // Depth is the number of separators + 1, but we want 0 for root level items
+                              const depth = relativePath.includes(path.sep) ? relativePath.split(path.sep).length -1 : 0;
+                              const indentation = depth * 15; // 15px per level
+
+                              return (
+                                <li
+                                  key={node.id}
+                                  className="flex justify-between items-center text-xs mb-1 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                                  title={node.id}
+                                  style={{ paddingLeft: `${indentation}px` }} // Apply indentation
+                                >
+                                  <span className="font-mono truncate mr-2">{node.data.name}</span>
+                                  {/* Display size only if it's a file (has size data) */}
+                                  {node.data.size !== undefined && node.data.size !== null && (
+                                    <span className="text-gray-500 dark:text-gray-400 whitespace-nowrap">{formatBytes(node.data.size)}</span>
+                                  )}
+                                  {/* Indicate folder if no size */} 
+                                  {(node.data.size === undefined || node.data.size === null) && node.isInternal && (
+                                    <span className="text-gray-500 dark:text-gray-400 whitespace-nowrap text-xs">Folder</span>
+                                  )}
+                                </li>
+                              );
+                           })}
                     </ul>
                 </div>
              ) : (
