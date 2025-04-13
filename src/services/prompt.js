@@ -1,9 +1,11 @@
+import { countTokens } from 'gpt-tokenizer';
+
 /**
- * Aggregates content from selected files and adds instructions.
+ * Aggregates content from selected files, adds instructions, and includes token counts.
  * @param {string[]} selectedFilePaths - Array of absolute file paths.
  * @param {string} instruction - Custom instruction text.
- * @param {string} baseDirectoryPath - The base path of the scanned directory, used to make file paths relative.
- * @returns {Promise<{formattedPrompt: string, errors: Array<{path: string, error: string, message?: string}>}>} - The formatted prompt string and any errors encountered.
+ * @param {string} baseDirectoryPath - The base path of the scanned directory.
+ * @returns {Promise<{formattedPrompt: string, errors: Array<{path: string, error: string, message?: string}>, fileDetails: Array<{path: string, tokenCount: number}>}>}
  */
 export async function createPrompt(
   selectedFilePaths,
@@ -12,6 +14,7 @@ export async function createPrompt(
 ) {
   let promptParts = [];
   const errors = [];
+  const fileDetails = []; // Store path and token count
 
   if (!Array.isArray(selectedFilePaths)) {
     console.error('createPrompt: selectedFilePaths must be an array');
@@ -24,6 +27,7 @@ export async function createPrompt(
           message: 'Selected files data is invalid.',
         },
       ],
+      fileDetails: [], // Return empty fileDetails on error
     };
   }
 
@@ -45,8 +49,10 @@ export async function createPrompt(
 
       if (typeof result.content === 'string') {
         const relativePath = getRelativePath(filePath, baseDirectoryPath);
+        const tokenCount = countTokens(result.content); // Calculate tokens
         promptParts.push(`File: ${relativePath}`);
         promptParts.push(result.content);
+        fileDetails.push({ path: relativePath, tokenCount }); // Store details
       } else {
         // Handle unexpected response structure
         console.warn(`Unexpected response for file: ${filePath}`, result);
@@ -67,14 +73,17 @@ export async function createPrompt(
     }
   }
 
-  // Add instruction if provided
+  // Add instruction if provided and count its tokens
   if (instruction && instruction.trim()) {
-    promptParts.push(`Instruction: ${instruction.trim()}`);
+    const instructionText = instruction.trim();
+    const instructionTokens = countTokens(instructionText); // Calculate tokens for instruction
+    promptParts.push(`Instruction: ${instructionText}`);
+    fileDetails.push({ path: 'Instruction', tokenCount: instructionTokens }); // Store instruction details
   }
 
   const formattedPrompt = promptParts.join('\n\n'); // Separate sections with double newlines
 
-  return { formattedPrompt, errors };
+  return { formattedPrompt, errors, fileDetails }; // Return fileDetails
 }
 
 /**

@@ -210,8 +210,10 @@ function App() {
     try {
       // Pass the unique list to the service
       const result = await createPrompt(uniqueFilesToInclude, instruction, selectedDirectory);
+      console.log("Prompt Generation Result:", result); // TEMP: Log the result for testing
       setGeneratedPrompt(result.formattedPrompt);
       setPromptErrors(result.errors);
+      // TODO: Store result.fileDetails in state (Phase 3)
       if (result.errors.length > 0) {
         toast.error(`Generated prompt with ${result.errors.length} error(s). Check error list.`);
       } else {
@@ -260,10 +262,7 @@ function App() {
       <header className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-semibold">Open Repo</h1>
-          <Button
-            onClick={handleSelectDirectory}
-            variant="secondary"
-          >
+          <Button onClick={handleSelectDirectory} variant="secondary">
             Select Project Folder
           </Button>
         </div>
