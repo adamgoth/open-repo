@@ -3,6 +3,8 @@ import { Tree } from 'react-arborist';
 import path from 'path-browserify'; // Use browser-compatible path module
 import { Toaster, toast } from 'react-hot-toast'; // Import Toaster and toast
 import { createPrompt } from './services/prompt'; // Import the prompt service
+import Button from './components/Button'; // Import the Button component
+
 
 
 // --- Data Transformation Utility ---
@@ -258,20 +260,20 @@ function App() {
       <header className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-semibold">Open Repo</h1>
-          <button
+          <Button
             onClick={handleSelectDirectory}
-            className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+            variant="secondary"
           >
             Select Project Folder
-          </button>
+          </Button>
         </div>
-        <button className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+        <Button variant="icon" title="Settings" className="p-2"> {/* Use Button component */} 
           {/* Placeholder for Settings Icon */}
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"> {/* Adjusted size slightly */}
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-        </button>
+        </Button>
       </header>
 
       {selectedDirectory && (
@@ -427,14 +429,30 @@ function App() {
                 </select>
               </div>
 
-              {/* Generate Button */} 
-              <button
-                onClick={handleGeneratePrompt}
-                disabled={isLoadingPrompt || selectedNodes.length === 0}
-                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded disabled:bg-gray-400 disabled:text-gray-800 disabled:cursor-not-allowed self-start text-sm dark:disabled:bg-gray-600 dark:disabled:text-gray-400"
-              >
-                {isLoadingPrompt ? 'Generating...' : 'Generate Prompt'}
-              </button>
+              {/* Buttons Row */} 
+              <div className="flex gap-2">
+                  {/* Generate Button */} 
+                  <Button
+                    onClick={handleGeneratePrompt}
+                    disabled={isLoadingPrompt || selectedNodes.length === 0}
+                    variant="primary"
+                    // className="self-start" // Remove self-start as flex container handles alignment
+                  >
+                    {isLoadingPrompt ? 'Generating...' : 'Generate Prompt'}
+                  </Button>
+
+                  {/* Copy Button - Moved Here */} 
+                  <Button
+                     onClick={handleCopyToClipboard}
+                     disabled={!generatedPrompt || isLoadingPrompt} // Disabled if no prompt OR loading
+                     variant="success"
+                   >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                     Copy Prompt
+                   </Button>
+              </div>
 
               {/* Prompt Preview & Errors (conditionally rendered) */} 
               {(isLoadingPrompt || generatedPrompt || promptErrors.length > 0) && (
@@ -492,20 +510,6 @@ function App() {
                ) : (
                   <p className="text-gray-500 dark:text-gray-400 text-sm text-center mt-4">No files selected.</p>
                )}
-            </div>
-
-             {/* --- Bottom Section: Copy Button (like image) --- */}
-            <div className="mt-auto pt-4 border-t border-gray-300 dark:border-gray-600 flex justify-start">
-               <button
-                  onClick={handleCopyToClipboard}
-                  disabled={!generatedPrompt || isLoadingPrompt}
-                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
-                >
-                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                 </svg>
-                  Copy Prompt
-                </button>
             </div>
 
           </div>
