@@ -16,6 +16,7 @@ console.log('__dirname:', __dirname);
 // console.log('MAIN_WINDOW_VITE_NAME:', typeof MAIN_WINDOW_VITE_NAME, MAIN_WINDOW_VITE_NAME);
 
 const DEFAULT_IGNORES = ['.git', 'node_modules/**'];
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
 // Recursive function to scan directory, now with filtering and size
 async function scanDirectoryRecursive(dirPath, basePath, ig, allFiles = []) {
@@ -111,6 +112,40 @@ async function handleScanDirectory(event, dirPath) {
   }
 }
 
+// IPC handler to read file content
+async function handleReadFileContent(event, filePath) {
+  console.log(`Received request to read file: ${filePath}`);
+  try {
+    const stats = await fs.stat(filePath);
+    if (stats.size > MAX_FILE_SIZE_BYTES) {
+      console.warn(`File too large: ${filePath} (${stats.size} bytes)`);
+      // Return a specific structure for large files
+      return { error: 'FileTooLarge', size: stats.size, path: filePath };
+    }
+    if (!stats.isFile()) {
+      console.warn(`Not a file: ${filePath}`);
+      return { error: 'NotAFile', path: filePath };
+    }
+
+    const content = await fs.readFile(filePath, 'utf-8');
+    console.log(`Successfully read file: ${filePath}`);
+    return { content: content, path: filePath }; // Return content successfully
+  } catch (error) {
+    console.error(`Error reading file ${filePath}:`, error);
+    if (error.code === 'ENOENT') {
+      return { error: 'NotFound', message: error.message, path: filePath };
+    } else if (error.code === 'EACCES') {
+      return {
+        error: 'PermissionDenied',
+        message: error.message,
+        path: filePath,
+      };
+    } else {
+      return { error: 'ReadError', message: error.message, path: filePath };
+    }
+  }
+}
+
 function createWindow() {
   console.log('--- createWindow called ---');
   const win = new BrowserWindow({
@@ -157,7 +192,8 @@ async function handleFileOpen() {
 app.whenReady().then(async () => {
   // Set up IPC handlers
   ipcMain.handle('dialog:openDirectory', handleFileOpen);
-  ipcMain.handle('scan:directory', handleScanDirectory); // Add new handler
+  ipcMain.handle('scan:directory', handleScanDirectory);
+  ipcMain.handle('file:readContent', handleReadFileContent); // Add the new handler
 
   createWindow();
 

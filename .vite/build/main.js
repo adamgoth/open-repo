@@ -468,6 +468,7 @@ const __dirname$1 = path.dirname(__filename$1);
 console.log("--- main.js started ---");
 console.log("__dirname:", __dirname$1);
 const DEFAULT_IGNORES = [".git", "node_modules/**"];
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 async function scanDirectoryRecursive(dirPath, basePath, ig, allFiles = []) {
   try {
     const entries = await fs.readdir(dirPath, { withFileTypes: true });
@@ -542,6 +543,36 @@ async function handleScanDirectory(event, dirPath) {
     return [];
   }
 }
+async function handleReadFileContent(event, filePath) {
+  console.log(`Received request to read file: ${filePath}`);
+  try {
+    const stats = await fs.stat(filePath);
+    if (stats.size > MAX_FILE_SIZE_BYTES) {
+      console.warn(`File too large: ${filePath} (${stats.size} bytes)`);
+      return { error: "FileTooLarge", size: stats.size, path: filePath };
+    }
+    if (!stats.isFile()) {
+      console.warn(`Not a file: ${filePath}`);
+      return { error: "NotAFile", path: filePath };
+    }
+    const content = await fs.readFile(filePath, "utf-8");
+    console.log(`Successfully read file: ${filePath}`);
+    return { content, path: filePath };
+  } catch (error) {
+    console.error(`Error reading file ${filePath}:`, error);
+    if (error.code === "ENOENT") {
+      return { error: "NotFound", message: error.message, path: filePath };
+    } else if (error.code === "EACCES") {
+      return {
+        error: "PermissionDenied",
+        message: error.message,
+        path: filePath
+      };
+    } else {
+      return { error: "ReadError", message: error.message, path: filePath };
+    }
+  }
+}
 function createWindow() {
   console.log("--- createWindow called ---");
   const win = new electron.BrowserWindow({
@@ -581,6 +612,7 @@ async function handleFileOpen() {
 electron.app.whenReady().then(async () => {
   electron.ipcMain.handle("dialog:openDirectory", handleFileOpen);
   electron.ipcMain.handle("scan:directory", handleScanDirectory);
+  electron.ipcMain.handle("file:readContent", handleReadFileContent);
   createWindow();
   electron.app.on("activate", () => {
     if (electron.BrowserWindow.getAllWindows().length === 0) createWindow();

@@ -1,10 +1,9 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { Tree } from 'react-arborist';
 import path from 'path-browserify'; // Use browser-compatible path module
+import { Toaster, toast } from 'react-hot-toast'; // Import Toaster and toast
+import { createPrompt } from './services/prompt'; // Import the prompt service
 
-// Import react-arborist default styles - REMOVED explicit CSS import
-// import 'react-arborist/dist/style.css'; // Original path
-// import 'react-arborist/dist/react-arborist.css'; // Attempted corrected path
 
 // --- Data Transformation Utility ---
 function buildTreeData(fileEntries, basePath) { // Input is now array of { path, size }
@@ -79,46 +78,135 @@ function App() {
   const [searchTerm, setSearchTerm] = useState(""); // State for search term
   const [selectedNodes, setSelectedNodes] = useState([]); // State for selected nodes
 
+  // --- New state for Prompt Generation ---
+  const [instruction, setInstruction] = useState('');
+  const [selectedTemplate, setSelectedTemplate] = useState('');
+  const [generatedPrompt, setGeneratedPrompt] = useState('');
+  const [promptErrors, setPromptErrors] = useState([]); // Array to hold errors {path, error, message}
+  const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
+
+  // --- Placeholder Templates ---
+  // TODO: Load from config/local storage later
+  const promptTemplates = useMemo(() => [
+    { value: '', label: 'Select a template...' },
+    { value: 'Refactor this code for clarity and efficiency.', label: 'Refactor Code' },
+    { value: 'Add comments to explain this code.', label: 'Add Comments' },
+    { value: 'Identify potential bugs in this code.', label: 'Identify Bugs' },
+    { value: 'Write unit tests for the selected files.', label: 'Write Unit Tests' },
+  ], []);
+
   const handleSelectDirectory = async () => {
     try {
       const directoryPath = await window.electronAPI.openDirectory();
       if (directoryPath) {
         setSelectedDirectory(directoryPath);
         setFileList([]);
-        setTreeData([]); // Clear previous tree data
+        setTreeData([]);
+        setSelectedNodes([]); // Reset selected nodes
+        setGeneratedPrompt(''); // Reset prompt
+        setPromptErrors([]); // Reset errors
+        setInstruction(''); // Reset instruction
+        setSelectedTemplate(''); // Reset template
         setIsLoading(true);
         console.log('Selected directory from renderer:', directoryPath);
         try {
           const fileEntries = await window.electronAPI.scanDirectory(directoryPath);
-          // fileList now stores {path, size} objects
           setFileList(fileEntries);
           console.log('Scanned file entries:', fileEntries);
-          // Transform flat list to tree structure
           const newTreeData = buildTreeData(fileEntries, directoryPath);
+          console.log('Output of buildTreeData:', JSON.stringify(newTreeData, null, 2));
           setTreeData(newTreeData);
-          console.log('Built tree data:', newTreeData);
+          console.log('Built tree data state updated.'); // Changed log message slightly
         } catch (scanError) {
           console.error('Error scanning directory:', scanError);
-          // TODO: Show user-friendly error
+          setPromptErrors([{ path: 'N/A', error: 'ScanError', message: 'Failed to scan directory.' }]);
         } finally {
           setIsLoading(false);
         }
       }
     } catch (error) {
       console.error('Error selecting directory:', error);
-      // TODO: Show user-friendly error message
+      setPromptErrors([{ path: 'N/A', error: 'SelectDirError', message: 'Failed to open directory dialog.' }]);
     }
   };
 
-  // Callback for when tree selection changes
   const handleSelect = (nodes) => {
     setSelectedNodes(nodes);
-    console.log("Selected Nodes:", nodes.map(node => node.id)); // Log selected IDs
-    // TODO: Use selected nodes data later (e.g., for prompt generation)
+    // Clear previous prompt when selection changes
+    setGeneratedPrompt('');
+    setPromptErrors([]);
+    console.log("Selected Nodes:", nodes.map(node => node.id));
   };
+
+  // --- Handlers for Prompt Generation ---
+  const handleInstructionChange = (e) => {
+    setInstruction(e.target.value);
+    setSelectedTemplate(''); // Clear template if custom instruction is typed
+    setGeneratedPrompt(''); // Clear prompt when instruction changes
+    setPromptErrors([]);
+  };
+
+  const handleTemplateChange = (e) => {
+    const templateValue = e.target.value;
+    setSelectedTemplate(templateValue);
+    setInstruction(templateValue); // Set instruction from template
+    setGeneratedPrompt(''); // Clear prompt when template changes
+    setPromptErrors([]);
+  };
+
+  const handleGeneratePrompt = async () => {
+    const filesToInclude = selectedNodes
+      .filter(node => !node.isInternal) // Only include files, not folders
+      .map(node => node.id); // Get the full path (ID)
+
+    if (filesToInclude.length === 0) {
+      toast.error('Please select at least one file.');
+      return;
+    }
+
+    setIsLoadingPrompt(true);
+    setGeneratedPrompt('');
+    setPromptErrors([]);
+
+    try {
+      const result = await createPrompt(filesToInclude, instruction, selectedDirectory);
+      setGeneratedPrompt(result.formattedPrompt);
+      setPromptErrors(result.errors);
+      if (result.errors.length > 0) {
+        toast.error(`Generated prompt with ${result.errors.length} error(s). Check error list.`);
+      } else {
+        toast.success('Prompt generated successfully!');
+      }
+    } catch (error) {
+      console.error('Error generating prompt:', error);
+      toast.error('An unexpected error occurred while generating the prompt.');
+      setPromptErrors([{ path: 'N/A', error: 'GenerationError', message: error.message }]);
+    } finally {
+      setIsLoadingPrompt(false);
+    }
+  };
+
+  const handleCopyToClipboard = () => {
+    if (!generatedPrompt) {
+      toast.error('Nothing to copy. Generate a prompt first.');
+      return;
+    }
+    navigator.clipboard.writeText(generatedPrompt)
+      .then(() => {
+        toast.success('Prompt copied to clipboard!');
+      })
+      .catch(err => {
+        console.error('Failed to copy text: ', err);
+        toast.error('Failed to copy prompt to clipboard.');
+      });
+  };
+
+  // --- Render Logic ---
+  const selectedFiles = useMemo(() => selectedNodes.filter(node => !node.isInternal), [selectedNodes]);
 
   return (
     <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+      <Toaster position="top-right" /> {/* Add Toaster component */}
       {/* Header */}
       <header className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
         <div className="flex items-center gap-4">
@@ -153,11 +241,6 @@ function App() {
 
       {/* Main Content */}
       <main className="flex-grow flex flex-col p-4 gap-4">
-        {selectedDirectory && (
-          <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-800 rounded text-sm">
-            Selected Path: <span className="font-mono">{selectedDirectory}</span>
-          </div>
-        )}
         <div className="flex-grow flex flex-col md:flex-row gap-4 overflow-hidden">
           {/* File Browser Area */}
           <div className="flex-1 flex flex-col border border-gray-300 dark:border-gray-600 rounded p-2 min-w-0">
@@ -168,9 +251,9 @@ function App() {
                   placeholder="Search files..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="mb-2 p-1 border rounded bg-white dark:bg-gray-700 text-sm w-full"
+                  className="mb-2 p-1 border rounded bg-white dark:bg-gray-700 text-sm w-full flex-shrink-0"
                 />
-                <div className="flex-grow overflow-auto">
+                <div className="flex-grow overflow-auto min-h-0">
                   <Tree
                     initialData={treeData}
                     openByDefault={false} // Start with folders collapsed
@@ -181,9 +264,18 @@ function App() {
                     paddingTop={10}
                     paddingBottom={10}
                     searchTerm={searchTerm}
-                    onSelect={handleSelect} // Pass the selection handler
+                    onSelect={handleSelect}
+                    disableMultiSelection={false} // Allow multi-select
                   >
-                    {/* Default Node renderer usually includes checkbox when onSelect is provided */}
+                    {/* REMOVE Custom Node Renderer
+                    {({ node, style, dragHandle }) => (
+                        <div style={style} ref={dragHandle} className="flex items-center justify-between text-sm pr-2">
+                            <span>{node.isInternal ? '📁' : '📄'} {node.data.name}</span>
+                            {node.data.size !== undefined && node.data.size !== null && (
+                                <span className="text-xs text-gray-500 dark:text-gray-400">{formatBytes(node.data.size)}</span>
+                            )}
+                        </div>
+                    )} */}
                   </Tree>
                 </div>
               </>
