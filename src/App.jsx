@@ -138,6 +138,21 @@ function App() {
     console.log("Selected Nodes:", nodes.map(node => node.id));
   };
 
+  // --- Helper function to recursively get all file IDs from a node ---
+  const getAllFileIds = (node) => {
+    let fileIds = [];
+    if (!node.isInternal) {
+      // It's a file
+      fileIds.push(node.id);
+    } else if (node.children) {
+      // It's a folder, process its children
+      node.children.forEach(child => {
+        fileIds = fileIds.concat(getAllFileIds(child));
+      });
+    }
+    return fileIds;
+  };
+
   // --- Handlers for Prompt Generation ---
   const handleInstructionChange = (e) => {
     setInstruction(e.target.value);
@@ -155,21 +170,28 @@ function App() {
   };
 
   const handleGeneratePrompt = async () => {
-    const filesToInclude = selectedNodes
-      .filter(node => !node.isInternal) // Only include files, not folders
-      .map(node => node.id); // Get the full path (ID)
+    // --- Updated logic to include files from selected folders --- 
+    let filesToInclude = [];
+    selectedNodes.forEach(node => {
+        filesToInclude = filesToInclude.concat(getAllFileIds(node));
+    });
+    
+    // Remove duplicates that might occur if a file and its parent folder are both selected
+    const uniqueFilesToInclude = [...new Set(filesToInclude)];
 
-    if (filesToInclude.length === 0) {
-      toast.error('Please select at least one file.');
+    if (uniqueFilesToInclude.length === 0) {
+      toast.error('Please select at least one file or a folder containing files.');
       return;
     }
+    // --- End of updated logic ---
 
     setIsLoadingPrompt(true);
     setGeneratedPrompt('');
     setPromptErrors([]);
 
     try {
-      const result = await createPrompt(filesToInclude, instruction, selectedDirectory);
+      // Pass the unique list to the service
+      const result = await createPrompt(uniqueFilesToInclude, instruction, selectedDirectory);
       setGeneratedPrompt(result.formattedPrompt);
       setPromptErrors(result.errors);
       if (result.errors.length > 0) {
@@ -267,15 +289,35 @@ function App() {
                     onSelect={handleSelect}
                     disableMultiSelection={false} // Allow multi-select
                   >
-                    {/* REMOVE Custom Node Renderer
+                    {/* --- Add Custom Node Renderer Back --- */}
                     {({ node, style, dragHandle }) => (
-                        <div style={style} ref={dragHandle} className="flex items-center justify-between text-sm pr-2">
-                            <span>{node.isInternal ? '📁' : '📄'} {node.data.name}</span>
-                            {node.data.size !== undefined && node.data.size !== null && (
-                                <span className="text-xs text-gray-500 dark:text-gray-400">{formatBytes(node.data.size)}</span>
-                            )}
-                        </div>
-                    )} */}
+                      <div
+                        style={style} // Apply calculated styles
+                        ref={dragHandle} // Attach drag handle
+                        className={`flex items-center text-sm cursor-pointer ${node.state.isSelected ? 'bg-blue-100 dark:bg-blue-800' : ''} hover:bg-gray-100 dark:hover:bg-gray-700 pr-2`}
+                        onClick={() => node.isInternal && node.toggle()} // Toggle folder on click
+                      >
+                        {/* Indentation and Toggle Arrow for Folders */}
+                        {node.isInternal && (
+                          <span
+                            className="px-1 cursor-pointer"
+                            onClick={(e) => { e.stopPropagation(); node.toggle(); }} // Toggle only on arrow click
+                          >
+                            {node.isOpen ? '▼' : '▶'}
+                          </span>
+                        )}
+                        {/* File/Folder Icon */}
+                        <span className="mr-1">
+                          {node.isInternal ? '📁' : '📄'}
+                        </span>
+                        {/* Node Name */}
+                        <span>{node.data.name}</span>
+                        {/* Optional: Size Display (can be added back if needed) */}
+                        {/* {node.data.size !== undefined && node.data.size !== null && (
+                            <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">{formatBytes(node.data.size)}</span>
+                        )} */}
+                      </div>
+                    )}
                   </Tree>
                 </div>
               </>
