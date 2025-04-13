@@ -389,59 +389,128 @@ function App() {
             )}
           </div>
 
-          {/* Prompt Preview Placeholder */}
-          <div className="flex-1 border border-dashed border-gray-400 dark:border-gray-600 rounded p-4 flex flex-col items-start justify-start overflow-auto">
-             <h2 className="text-lg font-semibold mb-2 self-center">Preview</h2>
-             {selectedNodes.length > 0 ? (
-                <div className="text-sm w-full">
-                    <p className="mb-2">Selected {selectedNodes.length} item(s):</p>
-                    <ul className="list-none p-0">
-                        {[...selectedNodes]
-                           .sort((a, b) => a.id.localeCompare(b.id)) // Sort nodes by path
-                           .map(node => {
-                              // Calculate depth for indentation
-                              const relativePath = selectedDirectory ? path.relative(selectedDirectory, node.id) : node.id;
-                              // Depth is the number of separators + 1, but we want 0 for root level items
-                              const depth = relativePath.includes(path.sep) ? relativePath.split(path.sep).length -1 : 0;
-                              const indentation = depth * 15; // 15px per level
+          {/* --- Right Pane: Prompt Gen + Selected Files + Copy --- */}
+          <div className="flex-1 flex flex-col border border-gray-300 dark:border-gray-600 rounded p-4 gap-4 overflow-hidden">
 
-                              return (
-                                <li
-                                  key={node.id}
-                                  className="flex justify-between items-center text-xs mb-1 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-                                  title={node.id}
-                                  style={{ paddingLeft: `${indentation}px` }} // Apply indentation
-                                >
-                                  <span className="font-mono truncate mr-2">{node.data.name}</span>
-                                  {/* Display size only if it's a file (has size data) */}
-                                  {node.data.size !== undefined && node.data.size !== null && (
-                                    <span className="text-gray-500 dark:text-gray-400 whitespace-nowrap">{formatBytes(node.data.size)}</span>
-                                  )}
-                                  {/* Indicate folder if no size */} 
-                                  {(node.data.size === undefined || node.data.size === null) && node.isInternal && (
-                                    <span className="text-gray-500 dark:text-gray-400 whitespace-nowrap text-xs">Folder</span>
-                                  )}
-                                </li>
-                              );
-                           })}
-                    </ul>
+            {/* --- Top Section: Prompt Generation Controls & Preview --- */}
+            <div className="flex flex-col gap-3 border-b border-gray-300 dark:border-gray-600 pb-4 mb-4">
+              <h2 className="text-lg font-semibold self-center">Prompt Generation</h2>
+
+              {/* Instruction Input */} 
+              <div className="flex flex-col gap-1">
+                <label htmlFor="instruction-input" className="text-sm font-medium">Instruction:</label>
+                <textarea
+                  id="instruction-input"
+                  rows={2} // Reduced rows slightly
+                  placeholder="Enter instruction or select template..."
+                  value={instruction}
+                  onChange={handleInstructionChange}
+                  className="w-full p-2 border rounded bg-white dark:bg-gray-700 text-sm"
+                />
+              </div>
+
+              {/* Template Selector */} 
+              <div className="flex flex-col gap-1">
+                {/* <label htmlFor="template-select" className="text-sm font-medium">Template:</label> */}
+                <select
+                  id="template-select"
+                  value={selectedTemplate}
+                  onChange={handleTemplateChange}
+                  className="w-full p-2 border rounded bg-white dark:bg-gray-700 text-sm"
+                  aria-label="Select Prompt Template"
+                >
+                  {promptTemplates.map(template => (
+                    <option key={template.value} value={template.value}>
+                      {template.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Generate Button */} 
+              <button
+                onClick={handleGeneratePrompt}
+                disabled={isLoadingPrompt || selectedNodes.length === 0}
+                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded disabled:bg-gray-400 disabled:text-gray-800 disabled:cursor-not-allowed self-start text-sm dark:disabled:bg-gray-600 dark:disabled:text-gray-400"
+              >
+                {isLoadingPrompt ? 'Generating...' : 'Generate Prompt'}
+              </button>
+
+              {/* Prompt Preview & Errors (conditionally rendered) */} 
+              {(isLoadingPrompt || generatedPrompt || promptErrors.length > 0) && (
+                 <div className="mt-2 flex flex-col gap-2 max-h-48 overflow-auto p-2 border rounded bg-gray-50 dark:bg-gray-800">
+                   <h3 className="text-md font-semibold self-center">Preview</h3>
+                   {isLoadingPrompt && <p className="text-center text-sm">Loading prompt...</p>}
+                   {promptErrors.length > 0 && (
+                      <div className="p-2 border border-red-400 bg-red-50 dark:bg-red-900/30 rounded">
+                        <h4 className="font-semibold text-red-700 dark:text-red-300 mb-1 text-xs">Errors ({promptErrors.length}):</h4>
+                        <ul className="list-disc list-inside text-xs text-red-600 dark:text-red-400">
+                          {promptErrors.map((err, index) => (
+                            <li key={index} title={`Error: ${err.error}, Msg: ${err.message}`}>
+                              <span className="font-mono">{err.path}</span>: {err.error} {err.message ? `(${err.message.split('\n')[0]})` : ''}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                   {generatedPrompt && !isLoadingPrompt && (
+                      <pre className="flex-1 text-xs whitespace-pre-wrap break-words">
+                        {generatedPrompt}
+                      </pre>
+                    )}
+                 </div>
+               )}
+            </div>
+
+            {/* --- Middle Section: Selected Files List (like image) --- */}
+            <div className="flex-grow flex flex-col gap-2 overflow-auto">
+               <h3 className="text-md font-semibold mb-1">Selected Files ({selectedNodes.length})</h3>
+               {selectedNodes.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                    {[...selectedNodes]
+                       .sort((a, b) => a.id.localeCompare(b.id)) // Sort nodes by path
+                       .map(node => {
+                          // Basic card styling - adjust as needed
+                          return (
+                            <div
+                              key={node.id}
+                              className="flex flex-col p-2 border rounded bg-gray-50 dark:bg-gray-800 min-w-[150px] max-w-[200px] text-xs shadow-sm"
+                              title={node.id}
+                            >
+                              <span className="font-semibold truncate mb-1">{node.isInternal ? '📁' : '📄'} {node.data.name}</span>
+                              {node.data.size !== undefined && node.data.size !== null ? (
+                                <span className="text-gray-500 dark:text-gray-400">{formatBytes(node.data.size)}</span>
+                              ) : node.isInternal ? (
+                                <span className="text-gray-500 dark:text-gray-400 italic">Folder</span>
+                              ) : (
+                                 <span className="text-gray-500 dark:text-gray-400 italic">Size N/A</span>
+                              )}
+                            </div>
+                          );
+                        })}
                 </div>
-             ) : (
-                <span className="text-gray-500 dark:text-gray-400 self-center">Select files/folders to preview.</span>
-             )}
-           </div>
+               ) : (
+                  <p className="text-gray-500 dark:text-gray-400 text-sm text-center mt-4">No files selected.</p>
+               )}
+            </div>
+
+             {/* --- Bottom Section: Copy Button (like image) --- */}
+            <div className="mt-auto pt-4 border-t border-gray-300 dark:border-gray-600 flex justify-start">
+               <button
+                  onClick={handleCopyToClipboard}
+                  disabled={!generatedPrompt || isLoadingPrompt}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
+                >
+                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                 </svg>
+                  Copy Prompt
+                </button>
+            </div>
+
+          </div>
         </div>
       </main>
-
-      {/* Footer */}
-      <footer className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-center">
-        <button
-          disabled
-          className="px-4 py-2 bg-blue-500 text-white rounded disabled:opacity-50 cursor-not-allowed"
-        >
-          Copy to Clipboard
-        </button>
-      </footer>
     </div>
   );
 }
