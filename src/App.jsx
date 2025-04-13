@@ -58,7 +58,8 @@ function buildTreeData(fileEntries, basePath) { // Input is now array of { path,
     });
   });
 
-  return root.children;
+  // Return an array containing the root node itself
+  return [root]; 
 }
 
 function formatBytes(bytes, decimals = 2) {
@@ -239,6 +240,15 @@ function App() {
   };
 
   // --- Render Logic ---
+  // Derive initial open state for the root node
+  const initialOpenState = useMemo(() => {
+    if (selectedDirectory) {
+      // The key should be the ID of the root node, which is the directory path
+      return { [selectedDirectory]: true };
+    }
+    return {};
+  }, [selectedDirectory]);
+
   const selectedFiles = useMemo(() => selectedNodes.filter(node => !node.isInternal), [selectedNodes]);
 
   return (
@@ -292,8 +302,10 @@ function App() {
                 />
                 <div className="flex-grow overflow-auto min-h-0">
                   <Tree
+                    key={selectedDirectory} // Force re-mount when directory changes
                     data={treeData}
-                    openByDefault={false} // Start with folders collapsed
+                    initialOpenState={initialOpenState} // Set initial open state
+                    openByDefault={false} // Keep this false, initialOpenState handles the root
                     width="100%" // Use full width of container
                     height={600} // Fixed height initially, adjust as needed
                     indent={24}
