@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Tree } from 'react-arborist';
 import path from 'path-browserify'; // Use browser-compatible path module
 import { Toaster, toast } from 'react-hot-toast'; // Import Toaster and toast
@@ -73,6 +73,18 @@ function formatBytes(bytes, decimals = 2) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 }
 
+// --- New Token Formatting Utility ---
+function formatTokensK(tokens) {
+  if (tokens === null || tokens === undefined) return ''; // Handle null/undefined
+  if (tokens < 1000) {
+    // Show as fraction of k for numbers < 1000
+    return (tokens / 1000).toFixed(1) + 'k';
+  } else {
+    // Show with one decimal place and 'k' for numbers >= 1000
+    return (tokens / 1000).toFixed(1) + 'k';
+  }
+}
+
 function App() {
   const [selectedDirectory, setSelectedDirectory] = useState(null);
   const [fileList, setFileList] = useState([]);
@@ -87,6 +99,10 @@ function App() {
   const [generatedPrompt, setGeneratedPrompt] = useState('');
   const [promptErrors, setPromptErrors] = useState([]); // Array to hold errors {path, error, message}
   const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
+  const [fileDetails, setFileDetails] = useState([]); // New state
+
+  // Ref for debounce timer
+  const debounceTimerRef = useRef(null);
 
   // --- Placeholder Templates ---
   // TODO: Load from config/local storage later
@@ -108,6 +124,7 @@ function App() {
         setSelectedNodes([]); // Reset selected nodes
         setGeneratedPrompt(''); // Reset prompt
         setPromptErrors([]); // Reset errors
+        setFileDetails([]); // Reset file details
         setInstruction(''); // Reset instruction
         setSelectedTemplate(''); // Reset template
         setIsLoading(true);
@@ -135,9 +152,11 @@ function App() {
 
   const handleSelect = (nodes) => {
     setSelectedNodes(nodes);
-    // Clear previous prompt when selection changes
+    // Clear previous prompt/details immediately when selection changes
+    // The useEffect will then trigger the new generation after debounce
     setGeneratedPrompt('');
     setPromptErrors([]);
+    setFileDetails([]); // Reset immediately
     console.log("Selected Nodes:", nodes.map(node => node.id));
   };
 
@@ -171,63 +190,94 @@ function App() {
     return nodes;
   };
 
-  // --- Handlers for Prompt Generation ---
-  const handleInstructionChange = (e) => {
-    setInstruction(e.target.value);
-    setSelectedTemplate(''); // Clear template if custom instruction is typed
-    setGeneratedPrompt(''); // Clear prompt when instruction changes
-    setPromptErrors([]);
-  };
+  // --- Refactored Prompt Generation Logic ---
+  const generatePromptData = useCallback(async () => {
+    console.log("generatePromptData triggered"); // Keep this log temporarily
 
-  const handleTemplateChange = (e) => {
-    const templateValue = e.target.value;
-    setSelectedTemplate(templateValue);
-    setInstruction(templateValue); // Set instruction from template
-    setGeneratedPrompt(''); // Clear prompt when template changes
-    setPromptErrors([]);
-  };
+    // Clear existing debounce timer if manually triggered
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
 
-  const handleGeneratePrompt = async () => {
-    // --- Updated logic to include files from selected folders --- 
     let filesToInclude = [];
     selectedNodes.forEach(node => {
         filesToInclude = filesToInclude.concat(getAllFileIds(node));
     });
-    
-    // Remove duplicates that might occur if a file and its parent folder are both selected
     const uniqueFilesToInclude = [...new Set(filesToInclude)];
 
+    // Don't proceed if nothing is selected (relevant if called directly)
     if (uniqueFilesToInclude.length === 0) {
-      toast.error('Please select at least one file or a folder containing files.');
-      return;
+      // Reset relevant states if nothing is selected
+      setGeneratedPrompt('');
+      setPromptErrors([]);
+      setFileDetails([]);
+      setIsLoadingPrompt(false); // Ensure loading is off
+      // toast.info('Select files to generate prompt.'); // Optional feedback
+      return; // Exit early
     }
-    // --- End of updated logic ---
 
     setIsLoadingPrompt(true);
-    setGeneratedPrompt('');
+    setGeneratedPrompt(''); // Reset prompt for new generation
     setPromptErrors([]);
+    setFileDetails([]);
 
     try {
-      // Pass the unique list to the service
       const result = await createPrompt(uniqueFilesToInclude, instruction, selectedDirectory);
-      console.log("Prompt Generation Result:", result); // TEMP: Log the result for testing
       setGeneratedPrompt(result.formattedPrompt);
       setPromptErrors(result.errors);
-      // TODO: Store result.fileDetails in state (Phase 3)
+      setFileDetails(result.fileDetails);
+
       if (result.errors.length > 0) {
-        toast.error(`Generated prompt with ${result.errors.length} error(s). Check error list.`);
+        // Don't show success toast if there were errors
+        toast.error(`Generated prompt data with ${result.errors.length} error(s).`);
       } else {
-        toast.success('Prompt generated successfully!');
+        // Only show success if no errors and prompt was generated
+        // toast.success('Prompt data generated automatically.'); // Optional feedback
       }
     } catch (error) {
-      console.error('Error generating prompt:', error);
-      toast.error('An unexpected error occurred while generating the prompt.');
+      console.error('Error generating prompt data:', error);
+      toast.error('An unexpected error occurred while generating prompt data.');
       setPromptErrors([{ path: 'N/A', error: 'GenerationError', message: error.message }]);
     } finally {
       setIsLoadingPrompt(false);
     }
+  }, [selectedNodes, instruction, selectedDirectory]); // Dependencies for useCallback
+
+  // --- Effect for Auto-Generation on Selection/Instruction Change ---
+  useEffect(() => {
+    // Clear any existing timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // If nodes are selected, set a timer to generate
+    if (selectedNodes.length > 0) {
+      debounceTimerRef.current = setTimeout(() => {
+        generatePromptData();
+      }, 750); // Debounce time (milliseconds)
+    } else {
+      // If selection is cleared, immediately reset states
+      setGeneratedPrompt('');
+      setPromptErrors([]);
+      setFileDetails([]);
+      setIsLoadingPrompt(false); // Ensure loading is off if selection clears
+    }
+
+    // Cleanup function to clear timer on unmount or before next effect run
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [selectedNodes, instruction, generatePromptData]); // Rerun when selection or instruction changes
+
+  // --- Simplified Button Handler ---
+  const handleGeneratePrompt = () => {
+    // Directly call the generation logic (no debounce needed for manual click)
+    generatePromptData();
   };
 
+  // --- Copy to Clipboard Handler ---
   const handleCopyToClipboard = () => {
     if (!generatedPrompt) {
       toast.error('Nothing to copy. Generate a prompt first.');
@@ -405,7 +455,13 @@ function App() {
                   rows={2} // Reduced rows slightly
                   placeholder="Enter instruction or select template..."
                   value={instruction}
-                  onChange={handleInstructionChange}
+                  onChange={(e) => {
+                    setInstruction(e.target.value);
+                    setSelectedTemplate('');
+                    setGeneratedPrompt('');
+                    setPromptErrors([]);
+                    setFileDetails([]); // Reset immediately
+                  }}
                   className="w-full p-2 border rounded bg-white dark:bg-gray-700 text-sm"
                 />
               </div>
@@ -416,7 +472,14 @@ function App() {
                 <select
                   id="template-select"
                   value={selectedTemplate}
-                  onChange={handleTemplateChange}
+                  onChange={(e) => {
+                    const templateValue = e.target.value;
+                    setSelectedTemplate(templateValue);
+                    setInstruction(templateValue);
+                    setGeneratedPrompt('');
+                    setPromptErrors([]);
+                    setFileDetails([]); // Reset immediately
+                  }}
                   className="w-full p-2 border rounded bg-white dark:bg-gray-700 text-sm"
                   aria-label="Select Prompt Template"
                 >
@@ -484,27 +547,45 @@ function App() {
                <h3 className="text-md font-semibold mb-1">Selected Files ({selectedNodes.length})</h3>
                {selectedNodes.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
-                    {[...selectedNodes]
-                       .sort((a, b) => a.id.localeCompare(b.id)) // Sort nodes by path
-                       .map(node => {
-                          // Basic card styling - adjust as needed
-                          return (
-                            <div
-                              key={node.id}
-                              className="flex flex-col p-2 border rounded bg-gray-50 dark:bg-gray-800 min-w-[150px] max-w-[200px] text-xs shadow-sm"
-                              title={node.id}
-                            >
-                              <span className="font-semibold truncate mb-1">{node.isInternal ? '📁' : '📄'} {node.data.name}</span>
-                              {node.data.size !== undefined && node.data.size !== null ? (
-                                <span className="text-gray-500 dark:text-gray-400">{formatBytes(node.data.size)}</span>
-                              ) : node.isInternal ? (
-                                <span className="text-gray-500 dark:text-gray-400 italic">Folder</span>
-                              ) : (
-                                 <span className="text-gray-500 dark:text-gray-400 italic">Size N/A</span>
-                              )}
-                            </div>
-                          );
-                        })}
+                    {(() => { // IIFE for logging
+
+                      return [...selectedNodes]
+                         .sort((a, b) => a.id.localeCompare(b.id)) // Sort nodes by path
+                         .map(node => {
+                            // Calculate relative path for lookup
+                            const relativePath = selectedDirectory && node.id.startsWith(selectedDirectory)
+                              ? node.id.substring(selectedDirectory.length).replace(/^[\/\\]/, '') // Remove leading slash/backslash
+                              : node.id;
+                            // Find corresponding file details
+                            const fileDetail = fileDetails.find(detail => detail.path === relativePath);
+
+                            // Basic card styling - adjust as needed
+                            return (
+                              <div
+                                key={node.id}
+                                className="flex flex-col p-2 border rounded bg-gray-50 dark:bg-gray-800 min-w-[150px] max-w-[200px] text-xs shadow-sm"
+                                title={node.id}
+                              >
+                                <span className="font-semibold truncate mb-1">{node.isInternal ? '📁' : '📄'} {node.data.name}</span>
+                                {/* Size or Folder indicator */}
+                                {node.data.size !== undefined && node.data.size !== null ? (
+                                  <span className="text-gray-500 dark:text-gray-400">{formatBytes(node.data.size)}</span>
+                                ) : node.isInternal ? (
+                                  <span className="text-gray-500 dark:text-gray-400 italic">Folder</span>
+                                ) : (
+                                   null // Render nothing if size is N/A for a file
+                                )}
+                                {/* Token Count for Files */}
+                                {!node.isInternal && fileDetail && (
+                                  <span className="text-gray-500 dark:text-gray-400 mt-1"> {/* Added margin-top */}
+                                    Tokens: {formatTokensK(fileDetail.tokenCount)}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          }); // End of map
+                    })() // Call IIFE
+                  }
                 </div>
                ) : (
                   <p className="text-gray-500 dark:text-gray-400 text-sm text-center mt-4">No files selected.</p>
