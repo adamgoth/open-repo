@@ -255,7 +255,7 @@ function App() {
                 />
                 <div className="flex-grow overflow-auto min-h-0">
                   <Tree
-                    initialData={treeData}
+                    data={treeData}
                     openByDefault={false} // Start with folders collapsed
                     width="100%" // Use full width of container
                     height={600} // Fixed height initially, adjust as needed
