@@ -286,17 +286,37 @@ function App() {
                     paddingTop={10}
                     paddingBottom={10}
                     searchTerm={searchTerm}
-                    onSelect={handleSelect}
-                    disableMultiSelection={false} // Allow multi-select
+                    disableMultiSelection={false}
                   >
-                    {/* --- Add Custom Node Renderer Back --- */}
                     {({ node, style, dragHandle }) => (
                       <div
                         style={style} // Apply calculated styles
                         ref={dragHandle} // Attach drag handle
-                        className={`flex items-center text-sm cursor-pointer ${node.state.isSelected ? 'bg-blue-100 dark:bg-blue-800' : ''} hover:bg-gray-100 dark:hover:bg-gray-700 pr-2`}
-                        onClick={() => node.isInternal && node.toggle()} // Toggle folder on click
+                        className={`flex items-center text-sm ${node.state.isSelected ? 'bg-blue-100 dark:bg-blue-800' : ''} hover:bg-gray-100 dark:hover:bg-gray-700 pr-2 cursor-pointer`}
                       >
+                        {/* Checkbox for Selection */}
+                        <input
+                          type="checkbox"
+                          checked={selectedNodes.some(selNode => selNode.id === node.id)}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            // --- Manual state management --- 
+                            const currentlySelected = selectedNodes.some(selNode => selNode.id === node.id);
+                            let newSelection;
+                            if (currentlySelected) {
+                              // Deselect: Filter out the current node
+                              newSelection = selectedNodes.filter(selNode => selNode.id !== node.id);
+                            } else {
+                              // Select: Add the current node
+                              newSelection = [...selectedNodes, node];
+                            }
+                            setSelectedNodes(newSelection); // Update the state directly
+                            // --- End manual state management ---
+                            // console.log(`[Checkbox onChange] Node ID: ${node.id}, isSelected BEFORE call: ${node.state.isSelected}`); 
+                            // node.selectMulti(e); // DO NOT call node API here
+                          }}
+                          className="mr-2 cursor-pointer"
+                        />
                         {/* Indentation and Toggle Arrow for Folders */}
                         {node.isInternal && (
                           <span
@@ -307,11 +327,11 @@ function App() {
                           </span>
                         )}
                         {/* File/Folder Icon */}
-                        <span className="mr-1">
+                        <span className="mr-1" onClick={(e) => { e.stopPropagation(); node.isInternal ? node.toggle() : node.selectMulti(e); /* Select file on icon click */ }}>
                           {node.isInternal ? '📁' : '📄'}
                         </span>
-                        {/* Node Name */}
-                        <span>{node.data.name}</span>
+                        {/* Node Name - Allow clicking name to select/toggle */}
+                        <span onClick={(e) => { e.stopPropagation(); node.isInternal ? node.toggle() : node.selectMulti(e); }}>{node.data.name}</span>
                         {/* Optional: Size Display (can be added back if needed) */}
                         {/* {node.data.size !== undefined && node.data.size !== null && (
                             <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">{formatBytes(node.data.size)}</span>
