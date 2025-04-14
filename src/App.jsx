@@ -1,11 +1,44 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Tree } from 'react-arborist';
 import path from 'path-browserify'; // Use browser-compatible path module
+import ignore from 'ignore'; // Import the ignore library
 import { Toaster, toast } from 'react-hot-toast'; // Import Toaster and toast
 import { createPrompt } from './services/prompt'; // Import the prompt service
 import Button from './components/Button'; // Import the Button component
 
 // --- Data Transformation Utility ---
+
+// Helper to get relative path, ensuring it starts correctly
+function getRelativePathForIgnore(fullPath, basePath) {
+  if (!basePath || !fullPath.startsWith(basePath)) {
+    return fullPath; // Cannot make relative
+  }
+  let relative = path.relative(basePath, fullPath);
+  // The 'ignore' library expects paths without a leading '/'
+  if (relative.startsWith(path.sep)) {
+    relative = relative.substring(1);
+  }
+  return relative;
+}
+
+// New function to filter entries and build the tree
+function filterAndBuildTree(unfilteredFileEntries, patterns, basePath) {
+  if (!unfilteredFileEntries || unfilteredFileEntries.length === 0 || !basePath) return [];
+
+  const ig = ignore().add(patterns); // Create ignore instance
+
+  const filteredEntries = unfilteredFileEntries.filter(entry => {
+    const relativePath = getRelativePathForIgnore(entry.path, basePath);
+    // Keep the entry if the relative path is NOT ignored
+    return !ig.ignores(relativePath);
+  });
+
+  console.log(`Filtered ${unfilteredFileEntries.length} entries down to ${filteredEntries.length}`); // Debug log
+
+  // Now build the tree with the filtered entries
+  return buildTreeData(filteredEntries, basePath);
+}
+
 function buildTreeData(fileEntries, basePath) { // Input is now array of { path, size }
   if (!fileEntries || fileEntries.length === 0 || !basePath) return [];
 
@@ -168,6 +201,8 @@ function App() {
 **/*.temp
 **/*.bak
 
+# Other
+.gitignore
 **/*.meta
 **/package-lock.json`;
   const [ignorePatterns, setIgnorePatterns] = useState(defaultIgnorePatterns);
@@ -186,25 +221,30 @@ function App() {
     try {
       const directoryPath = await window.electronAPI.openDirectory();
       if (directoryPath) {
+        // Reset states
         setSelectedDirectory(directoryPath);
-        setFileList([]);
+        setFileList([]); // Clear previous raw list
         setTreeData([]);
-        setSelectedNodes([]); // Reset selected nodes
-        setGeneratedPrompt(''); // Reset prompt
-        setPromptErrors([]); // Reset errors
-        setFileDetails([]); // Reset file details
-        setInstruction(''); // Reset instruction
-        setSelectedTemplate(''); // Reset template
+        setSelectedNodes([]);
+        setGeneratedPrompt('');
+        setPromptErrors([]);
+        setFileDetails([]);
+        setInstruction('');
+        setSelectedTemplate('');
         setIsLoading(true);
         console.log('Selected directory from renderer:', directoryPath);
         try {
-          const fileEntries = await window.electronAPI.scanDirectory(directoryPath);
-          setFileList(fileEntries);
-          console.log('Scanned file entries:', fileEntries);
-          const newTreeData = buildTreeData(fileEntries, directoryPath);
-          console.log('Output of buildTreeData:', JSON.stringify(newTreeData, null, 2));
-          setTreeData(newTreeData);
-          console.log('Built tree data state updated.'); // Changed log message slightly
+          // Scan directory to get ALL entries
+          const allFileEntries = await window.electronAPI.scanDirectory(directoryPath);
+          setFileList(allFileEntries); // Store the unfiltered list
+          console.log('Scanned unfiltered file entries:', allFileEntries.length);
+
+          // Filter based on current ignore patterns and build the tree
+          const initialTreeData = filterAndBuildTree(allFileEntries, ignorePatterns, directoryPath);
+          console.log('Output of initial filterAndBuildTree:', JSON.stringify(initialTreeData, null, 2));
+          setTreeData(initialTreeData);
+          console.log('Initial filtered tree data state updated.');
+
         } catch (scanError) {
           console.error('Error scanning directory:', scanError);
           setPromptErrors([{ path: 'N/A', error: 'ScanError', message: 'Failed to scan directory.' }]);
@@ -707,9 +747,23 @@ function App() {
         onPatternsChange={setIgnorePatterns}
         placeholderText={defaultIgnorePatterns}
         onSave={(newPatterns) => {
-          console.log("Saving ignore patterns:", newPatterns); // Placeholder for save logic
+          console.log("Applying new ignore patterns:", newPatterns);
+          // Refilter the original list and rebuild the tree
+          if (selectedDirectory && fileList.length > 0) {
+            const updatedTreeData = filterAndBuildTree(fileList, newPatterns, selectedDirectory);
+            setTreeData(updatedTreeData);
+            // Reset selection and prompt info as the tree structure changed
+            setSelectedNodes([]);
+            setGeneratedPrompt('');
+            setPromptErrors([]);
+            setFileDetails([]);
+            toast.success('Ignore patterns applied. File tree updated.');
+          } else {
+            console.warn("Cannot apply ignore patterns: No directory selected or original file list is empty.");
+            toast.error("Could not apply ignore patterns.")
+          }
+          // Saving to persistent storage is still a TODO
           // TODO: Implement saving logic (e.g., to local storage or a file)
-          // TODO: Trigger rescanning/refiltering if necessary
         }}
       />
     </div>
