@@ -91,6 +91,25 @@ function buildTreeData(fileEntries, basePath) { // Input is now array of { path,
     });
   });
 
+  // --- Sort children of each directory node ---
+  Object.values(map).forEach(node => {
+    if (node.children && node.children.length > 0) {
+      node.children.sort((a, b) => {
+        const aIsDir = !a.data || a.data.size === undefined; // Directories lack size
+        const bIsDir = !b.data || b.data.size === undefined;
+
+        if (aIsDir && !bIsDir) {
+          return -1; // a (dir) comes before b (file)
+        }
+        if (!aIsDir && bIsDir) {
+          return 1; // b (dir) comes after a (file)
+        }
+        // Both are dirs or both are files, sort by name
+        return a.name.localeCompare(b.name);
+      });
+    }
+  });
+
   // Return an array containing the root node itself
   return [root]; 
 }
@@ -133,9 +152,9 @@ function IgnoreModal({ isOpen, onClose, patterns, onPatternsChange, onSave, plac
           Edit ignore patterns. Global defaults are always combined with any `.repo_ignore` file found in a folder. Local patterns (from `.repo_ignore`) will override global defaults.
         </p>
         {/* Placeholder for Filter Scope & Select Folder - TODO */}
-        <div className="mb-4 p-2 border border-dashed border-gray-400 rounded text-center text-gray-500">
+        {/* <div className="mb-4 p-2 border border-dashed border-gray-400 rounded text-center text-gray-500">
           Filter Scope & Select Folder (UI Placeholder)
-        </div>
+        </div> */}
         <textarea
           className="w-full h-64 p-2 border rounded bg-gray-50 dark:bg-gray-700 text-sm font-mono mb-4 resize-none"
           value={patterns}
