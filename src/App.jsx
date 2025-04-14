@@ -271,6 +271,13 @@ function App() {
     };
   }, [selectedNodes, instruction, generatePromptData]); // Rerun when selection or instruction changes
 
+  // --- Calculate Total Token Count for Files ---
+  const totalTokenCount = useMemo(() => {
+    return fileDetails
+      .filter(detail => detail.path !== 'Instruction') // Exclude instruction
+      .reduce((sum, detail) => sum + detail.tokenCount, 0);
+  }, [fileDetails]);
+
   // --- Simplified Button Handler ---
   const handleGeneratePrompt = () => {
     // Directly call the generation logic (no debounce needed for manual click)
@@ -544,7 +551,9 @@ function App() {
 
             {/* --- Middle Section: Selected Files List (like image) --- */}
             <div className="flex-grow flex flex-col gap-2 overflow-auto">
-               <h3 className="text-md font-semibold mb-1">Selected Files ({selectedNodes.length})</h3>
+               <h3 className="text-md font-semibold mb-1">
+                 Selected Files ({selectedNodes.length}) {totalTokenCount > 0 && `| ${formatTokensK(totalTokenCount)} Tokens`}
+               </h3>
                {selectedNodes.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                     {(() => { // IIFE for logging
