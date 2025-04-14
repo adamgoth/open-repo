@@ -405,6 +405,89 @@ function App() {
       .reduce((sum, detail) => sum + detail.tokenCount, 0);
   }, [fileDetails]);
 
+  // --- Process selected nodes into grouped structure for rendering ---
+  const groupedSelectedFiles = useMemo(() => {
+    if (!selectedDirectory || selectedNodes.length === 0 || fileDetails.length === 0 || totalTokenCount === 0) {
+      return [];
+    }
+
+    const directoryMap = new Map();
+
+    // Get all selected files and map their IDs to token counts
+    const selectedFileTokenMap = new Map();
+    fileDetails.forEach(detail => {
+      if (detail.path !== 'Instruction') {
+        // Need the full path ID to match selectedNodes
+        const fullPathId = path.join(selectedDirectory, detail.path);
+        selectedFileTokenMap.set(fullPathId, detail.tokenCount);
+      }
+    });
+
+    const selectedFileNodes = selectedNodes.filter(node => !node.isInternal && selectedFileTokenMap.has(node.id));
+
+    // Populate directoryMap with files and calculate recursive totals
+    selectedFileNodes.forEach(fileNode => {
+      const tokenCount = selectedFileTokenMap.get(fileNode.id) || 0;
+      if (tokenCount === 0) return; // Skip files with no tokens
+
+      let currentPath = fileNode.id;
+      let relativePath = path.relative(selectedDirectory, currentPath);
+      let dirPath = path.dirname(relativePath);
+      if (dirPath === '.') dirPath = '/'; // Represent root clearly
+      const fileName = fileNode.data.name;
+
+      // Add file to its direct parent directory
+      if (!directoryMap.has(dirPath)) {
+        directoryMap.set(dirPath, { totalTokens: 0, files: [] });
+      }
+      directoryMap.get(dirPath).files.push({ 
+        id: fileNode.id, 
+        name: fileName, 
+        tokenCount: tokenCount, 
+        percentage: totalTokenCount > 0 ? (tokenCount / totalTokenCount * 100) : 0
+      });
+
+      // Add token count to current dir and all ancestors
+      let ancestorPath = dirPath;
+      while (true) {
+        if (!directoryMap.has(ancestorPath)) {
+          directoryMap.set(ancestorPath, { totalTokens: 0, files: [] });
+        }
+        directoryMap.get(ancestorPath).totalTokens += tokenCount;
+
+        if (ancestorPath === '/') break; // Reached the root representation
+        
+        let parent = path.dirname(ancestorPath);
+        if (parent === ancestorPath) break; // Avoid infinite loop at root
+        if (parent === '.') parent = '/'; // Normalize root representation
+        ancestorPath = parent;
+      }
+    });
+
+    // --- Correct the root directory total ---
+    if (directoryMap.has('/')) {
+      const rootData = directoryMap.get('/');
+      const rootFilesTotal = rootData.files.reduce((sum, file) => sum + file.tokenCount, 0);
+      // Update the totalTokens specifically for the root entry in the map
+      rootData.totalTokens = rootFilesTotal;
+      // Note: The percentage will be recalculated correctly in the next step using this updated total
+    }
+
+    // Convert map to array and calculate percentages
+    const groupedArray = Array.from(directoryMap.entries()).map(([dirPath, data]) => ({
+      directoryPath: dirPath === '/' ? '.' : dirPath, // Display root as '.'
+      totalTokens: data.totalTokens,
+      percentage: totalTokenCount > 0 ? (data.totalTokens / totalTokenCount * 100) : 0,
+      files: data.files.sort((a,b) => a.name.localeCompare(b.name)) // Sort files alphabetically within dir
+    }));
+
+    // Sort directories by totalTokens descending
+    groupedArray.sort((a, b) => b.totalTokens - a.totalTokens);
+
+    return groupedArray;
+
+  }, [selectedNodes, fileDetails, selectedDirectory, totalTokenCount]);
+
   // --- Simplified Button Handler ---
   const handleGeneratePrompt = () => {
     // Directly call the generation logic (no debounce needed for manual click)
@@ -703,56 +786,56 @@ function App() {
                )}
             </div>
 
-            {/* --- Middle Section: Selected Files List (like image) --- */}
-            <div className="flex-grow flex flex-col gap-2 overflow-auto">
-               <h3 className="text-md font-semibold mb-1">
-                 Selected Files ({selectedNodes.length}) {totalTokenCount > 0 && `| ${formatTokensK(totalTokenCount)} Tokens`}
-               </h3>
-               {selectedNodes.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                    {(() => { // IIFE for logging
-
-                      return [...selectedNodes]
-                         .sort((a, b) => a.id.localeCompare(b.id)) // Sort nodes by path
-                         .map(node => {
-                            // Calculate relative path for lookup
-                            const relativePath = selectedDirectory && node.id.startsWith(selectedDirectory)
-                              ? node.id.substring(selectedDirectory.length).replace(/^[\/\\]/, '') // Remove leading slash/backslash
-                              : node.id;
-                            // Find corresponding file details
-                            const fileDetail = fileDetails.find(detail => detail.path === relativePath);
-
-                            // Basic card styling - adjust as needed
-                            return (
-                              <div
-                                key={node.id}
-                                className="flex flex-col p-2 border rounded bg-gray-50 dark:bg-gray-800 min-w-[150px] max-w-[200px] text-xs shadow-sm"
-                                title={node.id}
-                              >
-                                <span className="font-semibold truncate mb-1">{node.isInternal ? '📁' : '📄'} {node.data.name}</span>
-                                {/* Size or Folder indicator */}
-                                {node.data.size !== undefined && node.data.size !== null ? (
-                                  <span className="text-gray-500 dark:text-gray-400">{formatBytes(node.data.size)}</span>
-                                ) : node.isInternal ? (
-                                  <span className="text-gray-500 dark:text-gray-400 italic">Folder</span>
-                                ) : (
-                                   null // Render nothing if size is N/A for a file
-                                )}
-                                {/* Token Count for Files */}
-                                {!node.isInternal && fileDetail && (
-                                  <span className="text-gray-500 dark:text-gray-400 mt-1"> {/* Added margin-top */}
-                                    Tokens: {formatTokensK(fileDetail.tokenCount)}
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          }); // End of map
-                    })() // Call IIFE
-                  }
+            {/* --- Middle Section: Selected Files List --- */}
+            <div className="flex-grow flex flex-col overflow-auto pr-1"> {/* Added padding-right for scrollbar */}
+              <div className="flex justify-between items-center pl-2 pr-1 sticky top-0 bg-white dark:bg-gray-800 py-1 mb-2"> {/* Container for header */}
+                <h3 className="text-md font-semibold"> {/* Removed mb-2, py-1 from h3 */}
+                  Selected Files ({selectedNodes.length})
+                </h3>
+                {totalTokenCount > 0 && (
+                  <span className="text-xs font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">
+                    ~{formatTokensK(totalTokenCount)} (100%)
+                  </span>
+                )}
+              </div>
+              {groupedSelectedFiles.length > 0 ? (
+                <div className="flex flex-col gap-1 text-sm pl-2"> {/* Added pl-2 */}
+                  {groupedSelectedFiles.map((group) => (
+                    <div key={group.directoryPath} className="mb-2"> {/* Margin between groups */}
+                      {/* Directory Header */}
+                      <div className="flex justify-between items-center bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                        <span className="font-medium text-gray-800 dark:text-gray-200 flex items-center gap-1">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                          </svg>
+                          {group.directoryPath}
+                        </span>
+                        <span className="text-xs font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">
+                          ~{formatTokensK(group.totalTokens)} ({group.percentage.toFixed(0)}%)
+                        </span>
+                      </div>
+                      {/* Files within Directory */}
+                      <div className="flex flex-col pl-4 pt-1"> {/* Indent files */}
+                        {group.files.map(file => (
+                          <div key={file.id} className="flex justify-between items-center py-0.5">
+                            <span className="text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                              </svg>
+                              {file.name}
+                            </span>
+                            <span className="text-xs font-mono text-gray-500 dark:text-gray-400">
+                              ~{formatTokensK(file.tokenCount)} ({file.percentage.toFixed(0)}%)
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-               ) : (
-                  <p className="text-gray-500 dark:text-gray-400 text-sm text-center mt-4">No files selected.</p>
-               )}
+              ) : (
+                 <p className="text-gray-500 dark:text-gray-400 text-sm text-center mt-4 px-4">{selectedNodes.length > 0 ? 'Calculating token counts...' : 'No files selected.'}</p>
+              )}
             </div>
 
           </div>
