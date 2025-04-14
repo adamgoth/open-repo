@@ -5,8 +5,6 @@ import { Toaster, toast } from 'react-hot-toast'; // Import Toaster and toast
 import { createPrompt } from './services/prompt'; // Import the prompt service
 import Button from './components/Button'; // Import the Button component
 
-
-
 // --- Data Transformation Utility ---
 function buildTreeData(fileEntries, basePath) { // Input is now array of { path, size }
   if (!fileEntries || fileEntries.length === 0 || !basePath) return [];
@@ -85,6 +83,45 @@ function formatTokensK(tokens) {
   }
 }
 
+// --- Ignore Patterns Modal Component ---
+function IgnoreModal({ isOpen, onClose, patterns, onPatternsChange, onSave, placeholderText }) {
+  if (!isOpen) return null;
+
+  const handleSave = () => {
+    onSave(patterns);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-lg mx-4">
+        <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Ignore Patterns</h2>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Edit ignore patterns. Global defaults are always combined with any `.repo_ignore` file found in a folder. Local patterns (from `.repo_ignore`) will override global defaults.
+        </p>
+        {/* Placeholder for Filter Scope & Select Folder - TODO */}
+        <div className="mb-4 p-2 border border-dashed border-gray-400 rounded text-center text-gray-500">
+          Filter Scope & Select Folder (UI Placeholder)
+        </div>
+        <textarea
+          className="w-full h-64 p-2 border rounded bg-gray-50 dark:bg-gray-700 text-sm font-mono mb-4 resize-none"
+          value={patterns}
+          onChange={(e) => onPatternsChange(e.target.value)}
+          placeholder={placeholderText}
+        />
+        <div className="flex justify-end gap-3">
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={handleSave}>
+            Save
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [selectedDirectory, setSelectedDirectory] = useState(null);
   const [fileList, setFileList] = useState([]);
@@ -103,6 +140,37 @@ function App() {
 
   // Ref for debounce timer
   const debounceTimerRef = useRef(null);
+
+  // --- State for Ignore Patterns Modal ---
+  const [isIgnoreModalOpen, setIsIgnoreModalOpen] = useState(false);
+  const defaultIgnorePatterns = `# Global ignore defaults
+**/node_modules/
+**/.npm/
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+
+# Build caches
+**/.gradle/
+**/.nuget/
+**/.cargo/
+**/.stack-work/
+**/.ccache/
+
+# IDE and Editor caches
+**/.idea/
+**/.vscode/
+**/*.swp
+**/*~
+
+# Temp files
+**/*.tmp
+**/*.temp
+**/*.bak
+
+**/*.meta
+**/package-lock.json`;
+  const [ignorePatterns, setIgnorePatterns] = useState(defaultIgnorePatterns);
 
   // --- Placeholder Templates ---
   // TODO: Load from config/local storage later
@@ -355,9 +423,21 @@ function App() {
                 title="Select Project Folder"
                 className="p-2 border rounded hover:bg-gray-100 dark:hover:bg-gray-700"
               >
-                {/* Folder Plus Icon SVG (adjusted size) */}
+                {/* Folder Plus Icon SVG */}
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}> 
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                </svg>
+              </Button>
+              {/* Filter Button */}
+              <Button 
+                onClick={() => setIsIgnoreModalOpen(true)}
+                variant="icon"
+                title="Filter Settings"
+                className="p-2 border rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                {/* Filter Icon SVG */}
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.572a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />
                 </svg>
               </Button>
               {selectedDirectory && (
@@ -619,6 +699,19 @@ function App() {
           </div>
         </div>
       </main>
+      {/* --- Modal Instance --- */}
+      <IgnoreModal
+        isOpen={isIgnoreModalOpen}
+        onClose={() => setIsIgnoreModalOpen(false)}
+        patterns={ignorePatterns}
+        onPatternsChange={setIgnorePatterns}
+        placeholderText={defaultIgnorePatterns}
+        onSave={(newPatterns) => {
+          console.log("Saving ignore patterns:", newPatterns); // Placeholder for save logic
+          // TODO: Implement saving logic (e.g., to local storage or a file)
+          // TODO: Trigger rescanning/refiltering if necessary
+        }}
+      />
     </div>
   );
 }
