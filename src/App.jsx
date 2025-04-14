@@ -319,9 +319,7 @@ function App() {
       <header className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-semibold">Open Repo</h1>
-          <Button onClick={handleSelectDirectory} variant="secondary">
-            Select Project Folder
-          </Button>
+          {/* Button moved to file browser area */}
         </div>
         <Button variant="icon" title="Settings" className="p-2"> {/* Use Button component */} 
           {/* Placeholder for Settings Icon */}
@@ -349,100 +347,117 @@ function App() {
         <div className="flex-grow flex flex-col md:flex-row gap-4 overflow-hidden">
           {/* File Browser Area */}
           <div className="flex-1 flex flex-col border border-gray-300 dark:border-gray-600 rounded p-2 min-w-0">
-            {selectedDirectory ? (
-              <>
+            {/* --- File Browser Header (Button + Optional Search) --- */}
+            <div className="flex items-center gap-2 mb-2 flex-shrink-0">
+              <Button 
+                onClick={handleSelectDirectory}
+                variant="icon"
+                title="Select Project Folder"
+                className="p-2 border rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                {/* Folder Plus Icon SVG (adjusted size) */}
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}> 
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                </svg>
+              </Button>
+              {selectedDirectory && (
                 <input
                   type="text"
                   placeholder="Search files..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="mb-2 p-1 border rounded bg-white dark:bg-gray-700 text-sm w-full flex-shrink-0"
+                  className="p-1 border rounded bg-white dark:bg-gray-700 text-sm w-full"
                 />
-                <div className="flex-grow overflow-auto min-h-0">
-                  <Tree
-                    key={selectedDirectory} // Force re-mount when directory changes
-                    data={treeData}
-                    initialOpenState={initialOpenState} // Set initial open state
-                    openByDefault={false} // Keep this false, initialOpenState handles the root
-                    width="100%" // Use full width of container
-                    height={600} // Fixed height initially, adjust as needed
-                    indent={24}
-                    rowHeight={22}
-                    paddingTop={10}
-                    paddingBottom={10}
-                    searchTerm={searchTerm}
-                    disableMultiSelection={false}
-                  >
-                    {({ node, style, dragHandle }) => (
-                      <div
-                        style={style} // Apply calculated styles
-                        ref={dragHandle} // Attach drag handle
-                        className={`flex items-center text-sm ${node.state.isSelected ? 'bg-blue-100 dark:bg-blue-800' : ''} hover:bg-gray-100 dark:hover:bg-gray-700 pr-2 cursor-pointer`}
-                      >
-                        {/* Checkbox for Selection */}
-                        <input
-                          type="checkbox"
-                          checked={selectedNodes.some(selNode => selNode.id === node.id)}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            const currentlySelected = selectedNodes.some(selNode => selNode.id === node.id);
-                            let newSelectedNodes;
+              )}
+            </div>
 
-                            if (node.isInternal) {
-                              // It's a directory
-                              const descendants = getAllDescendantNodes(node); // Get node and all descendants
-                              const descendantIds = new Set(descendants.map(n => n.id));
+            {/* --- Conditional Tree or Placeholder --- */}
+            {selectedDirectory ? (
+              <div className="flex-grow overflow-auto min-h-0">
+                <Tree
+                  key={selectedDirectory} // Force re-mount when directory changes
+                  data={treeData}
+                  initialOpenState={initialOpenState} // Set initial open state
+                  openByDefault={false} // Keep this false, initialOpenState handles the root
+                  width="100%" // Use full width of container
+                  height={600} // Fixed height initially, adjust as needed
+                  indent={24}
+                  rowHeight={22}
+                  paddingTop={10}
+                  paddingBottom={10}
+                  searchTerm={searchTerm}
+                  disableMultiSelection={false}
+                >
+                  {({ node, style, dragHandle }) => (
+                    <div
+                      style={style} // Apply calculated styles
+                      ref={dragHandle} // Attach drag handle
+                      className={`flex items-center text-sm ${node.state.isSelected ? 'bg-blue-100 dark:bg-blue-800' : ''} hover:bg-gray-100 dark:hover:bg-gray-700 pr-2 cursor-pointer`}
+                    >
+                      {/* Checkbox for Selection */}
+                      <input
+                        type="checkbox"
+                        checked={selectedNodes.some(selNode => selNode.id === node.id)}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          const currentlySelected = selectedNodes.some(selNode => selNode.id === node.id);
+                          let newSelectedNodes;
 
-                              if (currentlySelected) {
-                                // Unchecking a directory: Remove itself and all descendants
-                                newSelectedNodes = selectedNodes.filter(selNode => !descendantIds.has(selNode.id));
-                              } else {
-                                // Checking a directory: Add itself and all descendants (avoid duplicates)
-                                const currentSelectedIds = new Set(selectedNodes.map(n => n.id));
-                                const nodesToAdd = descendants.filter(d => !currentSelectedIds.has(d.id));
-                                newSelectedNodes = [...selectedNodes, ...nodesToAdd];
-                              }
+                          if (node.isInternal) {
+                            // It's a directory
+                            const descendants = getAllDescendantNodes(node); // Get node and all descendants
+                            const descendantIds = new Set(descendants.map(n => n.id));
+
+                            if (currentlySelected) {
+                              // Unchecking a directory: Remove itself and all descendants
+                              newSelectedNodes = selectedNodes.filter(selNode => !descendantIds.has(selNode.id));
                             } else {
-                              // It's a file
-                              if (currentlySelected) {
-                                // Unchecking a file
-                                newSelectedNodes = selectedNodes.filter(selNode => selNode.id !== node.id);
-                              } else {
-                                // Checking a file
-                                newSelectedNodes = [...selectedNodes, node];
-                              }
+                              // Checking a directory: Add itself and all descendants (avoid duplicates)
+                              const currentSelectedIds = new Set(selectedNodes.map(n => n.id));
+                              const nodesToAdd = descendants.filter(d => !currentSelectedIds.has(d.id));
+                              newSelectedNodes = [...selectedNodes, ...nodesToAdd];
                             }
-                            setSelectedNodes(newSelectedNodes);
-                          }}
-                          className="mr-2 cursor-pointer"
-                        />
-                        {/* Indentation and Toggle Arrow for Folders */}
-                        {node.isInternal && (
-                          <span
-                            className="px-1 cursor-pointer"
-                            onClick={(e) => { e.stopPropagation(); node.toggle(); }} // Toggle only on arrow click
-                          >
-                            {node.isOpen ? '▼' : '▶'}
-                          </span>
-                        )}
-                        {/* File/Folder Icon */}
-                        <span className="mr-1" onClick={(e) => { e.stopPropagation(); node.isInternal ? node.toggle() : node.selectMulti(e); /* Select file on icon click */ }}>
-                          {node.isInternal ? '📁' : '📄'}
+                          } else {
+                            // It's a file
+                            if (currentlySelected) {
+                              // Unchecking a file
+                              newSelectedNodes = selectedNodes.filter(selNode => selNode.id !== node.id);
+                            } else {
+                              // Checking a file
+                              newSelectedNodes = [...selectedNodes, node];
+                            }
+                          }
+                          setSelectedNodes(newSelectedNodes);
+                        }}
+                        className="mr-2 cursor-pointer"
+                      />
+                      {/* Indentation and Toggle Arrow for Folders */}
+                      {node.isInternal && (
+                        <span
+                          className="px-1 cursor-pointer"
+                          onClick={(e) => { e.stopPropagation(); node.toggle(); }} // Toggle only on arrow click
+                        >
+                          {node.isOpen ? '▼' : '▶'}
                         </span>
-                        {/* Node Name - Allow clicking name to select/toggle */}
-                        <span onClick={(e) => { e.stopPropagation(); node.isInternal ? node.toggle() : node.selectMulti(e); }}>{node.data.name}</span>
-                        {/* Optional: Size Display (can be added back if needed) */}
-                        {/* {node.data.size !== undefined && node.data.size !== null && (
-                            <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">{formatBytes(node.data.size)}</span>
-                        )} */}
-                      </div>
-                    )}
-                  </Tree>
-                </div>
-              </>
+                      )}
+                      {/* File/Folder Icon */}
+                      <span className="mr-1" onClick={(e) => { e.stopPropagation(); node.isInternal ? node.toggle() : node.selectMulti(e); /* Select file on icon click */ }}>
+                        {node.isInternal ? '📁' : '📄'}
+                      </span>
+                      {/* Node Name - Allow clicking name to select/toggle */}
+                      <span onClick={(e) => { e.stopPropagation(); node.isInternal ? node.toggle() : node.selectMulti(e); }}>{node.data.name}</span>
+                      {/* Optional: Size Display (can be added back if needed) */}
+                      {/* {node.data.size !== undefined && node.data.size !== null && (
+                          <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">{formatBytes(node.data.size)}</span>
+                      )} */}
+                    </div>
+                  )}
+                </Tree>
+              </div>
             ) : (
-              <div className="flex-grow flex items-center justify-center">
-                  <span className="text-gray-500 dark:text-gray-400">Select a project folder to view files.</span>
+              <div className="flex-grow flex items-center justify-center p-4">
+                  {/* Button moved to header above */}
+                  <span className="text-gray-500 dark:text-gray-400 text-center">Select a project folder using the button above to view files.</span>
               </div>
             )}
           </div>
