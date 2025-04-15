@@ -326,14 +326,13 @@ function App() {
       clearTimeout(debounceTimerRef.current);
     }
 
-    let filesToInclude = [];
-    selectedNodes.forEach(node => {
-        filesToInclude = filesToInclude.concat(getAllFileIds(node));
-    });
-    const uniqueFilesToInclude = [...new Set(filesToInclude)];
+    // Filter selectedNodes to get only the paths of selected *files*
+    const filesToInclude = selectedNodes
+      .filter(node => !node.isInternal) // Only include nodes that are files
+      .map(node => node.id);             // Get the ID (path) of each selected file
 
-    // Don't proceed if nothing is selected (relevant if called directly)
-    if (uniqueFilesToInclude.length === 0) {
+    // Don't proceed if no files are selected
+    if (filesToInclude.length === 0) {
       // Reset relevant states if nothing is selected
       setGeneratedPrompt('');
       setPromptErrors([]);
@@ -349,7 +348,8 @@ function App() {
     setFileDetails([]);
 
     try {
-      const result = await createPrompt(uniqueFilesToInclude, instruction, selectedDirectory);
+      // Pass the explicitly selected file paths to createPrompt
+      const result = await createPrompt(filesToInclude, instruction, selectedDirectory);
       setGeneratedPrompt(result.formattedPrompt);
       setPromptErrors(result.errors);
       setFileDetails(result.fileDetails);
