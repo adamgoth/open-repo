@@ -1,7 +1,8 @@
 import { countTokens } from 'gpt-tokenizer';
 
 /**
- * Aggregates content from selected files, adds instructions, and includes token counts.
+ * Aggregates content from selected files, adds instructions, includes token counts,
+ * and formats the output with specific tags.
  * @param {string[]} selectedFilePaths - Array of absolute file paths.
  * @param {string} instruction - Custom instruction text.
  * @param {string} baseDirectoryPath - The base path of the scanned directory.
@@ -12,7 +13,13 @@ export async function createPrompt(
   instruction,
   baseDirectoryPath,
 ) {
-  let promptParts = [];
+  // --- File Map Generation (Needs Implementation) ---
+  // We need the file structure data here. Assuming it's passed or fetched.
+  // For now, we'll just create a placeholder message.
+  // const fileMapString = generateFileMapString(selectedFilePaths, baseDirectoryPath); // Ideal
+  const fileMapString = `<file_map>\n[File map generation not yet implemented]\nBased on: ${baseDirectoryPath}\n</file_map>`; // Placeholder
+
+  let fileContentsString = '';
   const errors = [];
   const fileDetails = []; // Store path and token count
 
@@ -27,63 +34,84 @@ export async function createPrompt(
           message: 'Selected files data is invalid.',
         },
       ],
-      fileDetails: [], // Return empty fileDetails on error
+      fileDetails: [],
     };
   }
 
+  // --- Process Files for Content ---
   for (const filePath of selectedFilePaths) {
     try {
-      // Use the exposed Electron API function
       const result = await window.electronAPI.readFileContent(filePath);
 
-      // Check for errors returned from the main process
       if (result.error) {
         console.warn(`Skipping file due to error: ${filePath}`, result);
+        const relativePath = getRelativePath(filePath, baseDirectoryPath);
         errors.push({
-          path: getRelativePath(filePath, baseDirectoryPath),
+          path: relativePath,
           error: result.error,
           message: result.message || `Size: ${result.size} bytes`,
         });
-        continue; // Skip this file
+        // Add error marker to file contents as well?
+        fileContentsString += `File: ${relativePath}\n\`\`\`\nError reading file: ${
+          result.error
+        } (${result.message || 'Details unavailable'})\n\`\`\`\n\n`;
+        fileDetails.push({ path: relativePath, tokenCount: 0 }); // Add entry with 0 tokens for error files
+        continue;
       }
 
       if (typeof result.content === 'string') {
         const relativePath = getRelativePath(filePath, baseDirectoryPath);
-        const tokenCount = countTokens(result.content); // Calculate tokens
-        promptParts.push(`File: ${relativePath}`);
-        promptParts.push(result.content);
-        fileDetails.push({ path: relativePath, tokenCount }); // Store details
+        const tokenCount = countTokens(result.content);
+        // Append file content in the desired format
+        fileContentsString += `File: ${relativePath}\n\`\`\`\n${result.content}\n\`\`\`\n\n`;
+        fileDetails.push({ path: relativePath, tokenCount });
       } else {
-        // Handle unexpected response structure
         console.warn(`Unexpected response for file: ${filePath}`, result);
+        const relativePath = getRelativePath(filePath, baseDirectoryPath);
         errors.push({
-          path: getRelativePath(filePath, baseDirectoryPath),
+          path: relativePath,
           error: 'UnexpectedResponse',
           message: 'Invalid content received from main process.',
         });
+        // Add error marker to file contents
+        fileContentsString += `File: ${relativePath}\n\`\`\`\nError: Unexpected response format from main process.\n\`\`\`\n\n`;
+        fileDetails.push({ path: relativePath, tokenCount: 0 });
       }
     } catch (error) {
-      // Catch errors during the IPC call itself
       console.error(`Error invoking readFileContent for ${filePath}:`, error);
+      const relativePath = getRelativePath(filePath, baseDirectoryPath);
       errors.push({
-        path: getRelativePath(filePath, baseDirectoryPath),
+        path: relativePath,
         error: 'IPCError',
         message: error.message,
       });
+      // Add error marker to file contents
+      fileContentsString += `File: ${relativePath}\n\`\`\`\nError: Could not invoke file read operation (${error.message}).\n\`\`\`\n\n`;
+      fileDetails.push({ path: relativePath, tokenCount: 0 });
     }
   }
 
-  // Add instruction if provided and count its tokens
+  // --- Prepare Instruction Section ---
+  let userInstructionsString = '';
   if (instruction && instruction.trim()) {
     const instructionText = instruction.trim();
-    const instructionTokens = countTokens(instructionText); // Calculate tokens for instruction
-    promptParts.push(`Instruction: ${instructionText}`);
-    fileDetails.push({ path: 'Instruction', tokenCount: instructionTokens }); // Store instruction details
+    const instructionTokens = countTokens(instructionText);
+    userInstructionsString = `<user_instructions>\n${instructionText}\n</user_instructions>`;
+    // Add instruction tokens to fileDetails if needed for total count
+    fileDetails.push({ path: 'Instruction', tokenCount: instructionTokens });
+  } else {
+    userInstructionsString = `<user_instructions>\n[No instruction provided]\n</user_instructions>`;
   }
 
-  const formattedPrompt = promptParts.join('\n\n'); // Separate sections with double newlines
+  // --- Combine Sections ---
+  // Ensure sections are separated by exactly one newline
+  const formattedPrompt = [
+    fileMapString,
+    `<file_contents>\n${fileContentsString.trim()}\n</file_contents>`, // Trim trailing newlines from last file
+    userInstructionsString,
+  ].join('\n\n'); // Join sections with double newlines
 
-  return { formattedPrompt, errors, fileDetails }; // Return fileDetails
+  return { formattedPrompt, errors, fileDetails };
 }
 
 /**
