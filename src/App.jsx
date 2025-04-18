@@ -250,6 +250,7 @@ function App() {
         setFileDetails([]);
         setInstruction('');
         setSelectedTemplate('');
+        setSearchTerm(''); // Reset search term on new directory selection
         setIsLoading(true);
         console.log('Selected directory from renderer:', directoryPath);
         try {
@@ -522,6 +523,21 @@ function App() {
 
   const selectedFiles = useMemo(() => selectedNodes.filter(node => !node.isInternal), [selectedNodes]);
 
+  // --- New Handler to Clear Directory Selection --- 
+  const handleClearDirectory = () => {
+    setSelectedDirectory(null);
+    setFileList([]);
+    setTreeData([]);
+    setSelectedNodes([]);
+    setGeneratedPrompt('');
+    setPromptErrors([]);
+    setFileDetails([]);
+    setInstruction('');
+    setSelectedTemplate('');
+    setSearchTerm(""); // Clear search term as well
+    toast.info('Directory selection cleared.'); // Optional feedback
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       <Toaster position="top-right" /> {/* Add Toaster component */}
@@ -582,6 +598,20 @@ function App() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.572a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />
                 </svg>
               </Button>
+              {/* --- Clear Button (Conditionally Rendered) --- */}
+              {selectedDirectory && (
+                <Button
+                  onClick={handleClearDirectory}
+                  variant="icon"
+                  title="Clear Selected Directory"
+                  className="p-2 border rounded text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/50"
+                >
+                  {/* X Circle Icon SVG */}
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </Button>
+              )}
               {selectedDirectory && (
                 <input
                   type="text"
