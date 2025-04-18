@@ -13,11 +13,11 @@ export async function createPrompt(
   instruction,
   baseDirectoryPath,
 ) {
-  // --- File Map Generation (Needs Implementation) ---
-  // We need the file structure data here. Assuming it's passed or fetched.
-  // For now, we'll just create a placeholder message.
-  // const fileMapString = generateFileMapString(selectedFilePaths, baseDirectoryPath); // Ideal
-  const fileMapString = `<file_map>\n[File map generation not yet implemented]\nBased on: ${baseDirectoryPath}\n</file_map>`; // Placeholder
+  // --- Generate File Map ---
+  const fileMapString = generateFileMapString(
+    selectedFilePaths,
+    baseDirectoryPath,
+  );
 
   let fileContentsString = '';
   const errors = [];
@@ -122,11 +122,74 @@ export async function createPrompt(
  */
 function getRelativePath(fullPath, basePath) {
   if (basePath && fullPath.startsWith(basePath)) {
-    // Add leading slash if missing after removing base path
     const relative = fullPath.substring(basePath.length);
+    // Ensure leading slash is removed for consistency
     return relative.startsWith('/') || relative.startsWith('\\')
       ? relative.substring(1)
       : relative;
   }
   return fullPath; // Fallback to full path if base path is not applicable
+}
+
+/**
+ * Generates a string representation of the selected file structure.
+ * @param {string[]} selectedFilePaths - Array of absolute file paths.
+ * @param {string} baseDirectoryPath - The base path of the scanned directory.
+ * @returns {string}
+ */
+function generateFileMapString(selectedFilePaths, baseDirectoryPath) {
+  const relativePaths = selectedFilePaths.map((fp) =>
+    getRelativePath(fp, baseDirectoryPath),
+  ); //.sort();
+  const tree = {};
+
+  // Build the tree structure from paths
+  relativePaths.forEach((relPath) => {
+    const parts = relPath.split(/[\\/]/); // Split by forward or backslash
+    let currentLevel = tree;
+    parts.forEach((part, index) => {
+      if (!part) return; // Skip empty parts (e.g., from leading slash)
+      if (index === parts.length - 1) {
+        // Last part is the file
+        currentLevel[part] = null; // Mark as file
+      } else {
+        // Directory part
+        if (!currentLevel[part]) {
+          currentLevel[part] = {}; // Create directory object if it doesn't exist
+        }
+        currentLevel = currentLevel[part];
+      }
+    });
+  });
+
+  // Recursive function to format the tree into a string
+  function formatTree(node, prefix = '', isLast = true) {
+    let result = '';
+    const keys = Object.keys(node).sort((a, b) => {
+      // Sort directories before files, then alphabetically
+      const aIsDir = node[a] !== null;
+      const bIsDir = node[b] !== null;
+      if (aIsDir && !bIsDir) return -1;
+      if (!aIsDir && bIsDir) return 1;
+      return a.localeCompare(b);
+    });
+
+    keys.forEach((key, index) => {
+      const currentIsLast = index === keys.length - 1;
+      const connector = currentIsLast ? '└── ' : '├── ';
+      result += `${prefix}${connector}${key}\n`;
+
+      // If it's a directory (not null), recurse
+      if (node[key] !== null) {
+        const newPrefix = prefix + (currentIsLast ? '    ' : '│   ');
+        result += formatTree(node[key], newPrefix, currentIsLast);
+      }
+    });
+    return result;
+  }
+
+  // Format the final string
+  const baseName = baseDirectoryPath.split(/[\\/]/).pop() || baseDirectoryPath; // Get last part of base path
+  const mapContent = formatTree(tree);
+  return `<file_map>\n${baseName}\n${mapContent.trim()}\n</file_map>`;
 }
