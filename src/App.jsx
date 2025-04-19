@@ -556,12 +556,6 @@ function App() {
         </Button>
       </header>
 
-      {selectedDirectory && (
-        <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-800 rounded text-sm">
-          Selected Path: <span className="font-mono">{selectedDirectory}</span>
-        </div>
-      )}
-
       {isLoading && (
         <div className="mb-2 p-2 text-center">
           Loading files...
