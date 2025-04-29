@@ -1,71 +1,113 @@
-# Electron + Vite + React + Tailwind CSS Starter
+# Open Repo
 
-This is a starter template for building desktop applications using:
+_Open Repo_ is an Electron desktop app that helps you **select, scan, and generate prompts** from files inside a code repository.
 
-- **Electron Forge**: For building and packaging cross-platform desktop apps.
-- **Vite**: As the frontend build tool, providing a fast development experience.
-- **React**: The JavaScript library for building user interfaces.
-- **React Router**: For handling routing within the React application.
-- **Tailwind CSS**: A utility-first CSS framework for rapid UI development.
+It is optimized for AI prompting workflows by building file maps, aggregating file contents, counting tokens, and formatting structured prompts automatically.
+
+The app is built with:
+
+- **Electron Forge** for cross-platform desktop packaging
+
+- **Vite** for fast frontend development
+
+- **React** for UI
+
+- **Tailwind CSS** for styling
+
+- **React Arborist** for file tree navigation
+
+- **GPT Tokenizer** for token counting
+
+---
+
+## Features
+
+- 📂 Select a project folder and browse files in a tree view
+
+- 🔍 Filter files using global and custom ignore patterns
+
+- ✍️ Select files, add custom instructions, and auto-generate structured prompts
+
+- 🧮 View live token counts per file, directory, and selection
+
+- 📋 Copy formatted prompts to clipboard
+
+- ⚡ Fast and lightweight, runs locally with no server dependencies
+
+---
 
 ## Getting Started
 
-To get started with this template:
+### 1. Install Dependencies
 
-1.  **Install dependencies:**
+Clone the repo and install:
 
-    ```bash
-    npm install
-    ```
+```bash
 
-2.  **Run the development server:**
+npm  install
 
-    ```bash
-    npm run dev
-    ```
+```
 
-    This will start the Vite development server for the renderer process (your React app).
+### 2. Run in Development
 
-3.  **Start the Electron application:**
-    In a separate terminal, run:
-    ```bash
-    npm start
-    ```
-    This command uses Electron Forge to launch the main Electron process, which will load your React app from the Vite dev server.
+To start the application in development mode, run the following command in your terminal:
 
-## Building the Application
+```bash
 
-To build your application for production:
+npm  run  start
 
-1.  **Build the React frontend:**
+```
 
-    ```bash
-    npm run build
-    ```
+## Building the App
 
-    This creates a production-ready build of your React app using Vite.
+To create a production build:
 
-2.  **Package the Electron app:**
+1. Build the frontend:
 
-    ```bash
-    npm run package
-    ```
+```bash
 
-    This uses Electron Forge to package your application into distributable formats for different operating systems.
+npm  run  build
 
-3.  **Create installers (optional):**
-    ```bash
-    npm run make
-    ```
-    This uses Electron Forge to create installers (e.g., `.dmg`, `.exe`, `.deb`) for your packaged application.
+```
 
-## Project Structure
+2. Package the Electron app:
 
-- `main.js`: The entry point for the Electron main process.
-- `src/`: Contains the source code for the React application (renderer process).
-  - `main.jsx`: The entry point for the React application.
-  - `App.jsx`: The main application component with routing.
-  - `index.css`: Global styles and Tailwind CSS imports.
-- `tailwind.config.js`: Configuration file for Tailwind CSS.
-- `vite.config.js`: Configuration file for Vite.
-- `electron.vite.config.js`: Configuration specific to Electron Vite integration.
+```bash
+
+npm  run  package
+
+```
+
+> The packaged app will appear under the `out/` directory.
+
+3. (Optional) Create OS-specific installers:
+
+```bash
+
+npm  run  make
+
+```
+
+---
+
+## How to Use Open Repo
+
+1. Launch the app.
+
+2. Click the folder icon 📂 to select a project directory.
+
+3. The file tree will load automatically (honoring `.gitignore` and `repo_ignore` rules).
+
+4. Select individual files or entire folders.
+
+5. (Optional) Edit ignore filters by clicking the filter icon.
+
+6. Enter an **Instruction** (e.g., "Summarize these files" or "Refactor this code").
+
+7. Pick a predefined **template** or write a custom instruction.
+
+8. Click **Generate Prompt**.
+
+9. View the formatted prompt and file map preview.
+
+10. Click **Copy Prompt** to copy to clipboard for use in an LLM chat or fine-tuning workflow.
